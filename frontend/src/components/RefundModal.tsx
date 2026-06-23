@@ -18,30 +18,34 @@ const AMOUNT_RE = /^\d{1,12}(\.\d{1,2})?$/;
 
 export function RefundModal({ tx, onClose, onSuccess }: RefundModalProps) {
   const refundable = (Number(tx.amount) - Number(tx.refundedAmount)).toFixed(2);
+  const max = Number(refundable);
+
   const [amount, setAmount] = useState(refundable);
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function validate(): string | null {
-    if (!AMOUNT_RE.test(amount)) {
-      return 'Сумма должна быть положительным числом, напр. "10.00".';
+  function handleAmountChange(raw: string) {
+    let v = raw.replace(/[^\d.]/g, "");
+    const dot = v.indexOf(".");
+    if (dot !== -1) {
+      const int = v.slice(0, dot);
+      const dec = v.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+      v = `${int}.${dec}`;
     }
-    if (Number(amount) <= 0) {
-      return "Сумма возврата должна быть больше нуля.";
+    if (v !== "" && v !== "." && Number(v) > max) {
+      v = refundable;
     }
-    if (Number(amount) > Number(refundable)) {
-      return `Сумма превышает доступные к возврату ${refundable} ${tx.currency}.`;
-    }
-    return null;
+    setAmount(v);
+    setError(null);
   }
 
+  const amountNum = Number(amount);
+  const amountValid =
+    AMOUNT_RE.test(amount) && amountNum > 0 && amountNum <= max;
+
   async function handleSubmit() {
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    if (!amountValid) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -79,7 +83,7 @@ export function RefundModal({ tx, onClose, onSuccess }: RefundModalProps) {
             type="text"
             inputMode="decimal"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => handleAmountChange(e.target.value)}
             disabled={submitting}
             autoFocus
           />
@@ -110,7 +114,7 @@ export function RefundModal({ tx, onClose, onSuccess }: RefundModalProps) {
             type="button"
             className="btn-primary"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !amountValid}
           >
             {submitting ? "Обработка…" : "Сделать возврат"}
           </button>

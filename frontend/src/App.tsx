@@ -1,79 +1,60 @@
-import { useState } from "react";
-import type { Transaction } from "../types";
-import { RefundModal, type RowPatch } from "./RefundModal";
+import { useEffect, useState } from "react";
+import { fetchTransactions } from "./api/client";
+import { TransactionsTable } from "./components/TransactionsTable";
+import type { Transaction } from "./types";
+import "./App.css";
 
-interface TransactionsTableProps {
-  transactions: Transaction[];
-  onRefunded: (patch: RowPatch) => void;
-}
+export default function App() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-function refundable(tx: Transaction): number {
-  return Number(tx.amount) - Number(tx.refundedAmount);
-}
+  useEffect(() => {
+    let cancelled = false;
 
-function isRefundable(tx: Transaction): boolean {
-  return refundable(tx) > 0 && tx.status.toLowerCase() !== "refunded";
-}
+    fetchTransactions()
+      .then((data) => {
+        if (!cancelled) setTransactions(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Unknown error");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-export function TransactionsTable({ transactions, onRefunded }: TransactionsTableProps) {
-  const [activeTx, setActiveTx] = useState<Transaction | null>(null);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
-    <>
-      <table className="tx-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Merchant</th>
-            <th className="num">Amount</th>
-            <th>Currency</th>
-            <th className="num">Fee</th>
-            <th>Status</th>
-            <th className="num">Refunded</th>
-            <th>Created</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {transactions.map((tx) => (
-            <tr key={tx.id}>
-              <td>{tx.id}</td>
-              <td>{tx.merchantName}</td>
-              <td className="num">{tx.amount}</td>
-              <td>{tx.currency}</td>
-              <td className="num">{tx.feeDisplayed}</td>
-              <td>
-                <span className={`status status-${tx.status.toLowerCase()}`}>
-                  {tx.status}
-                </span>
-              </td>
-              <td className="num">{tx.refundedAmount}</td>
-              <td>{new Date(tx.createdAt).toLocaleString()}</td>
-              <td>
-                <button
-                  type="button"
-                  className="refund-btn"
-                  disabled={!isRefundable(tx)}
-                  onClick={() => setActiveTx(tx)}
-                >
-                  Возврат
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <main className="app">
+      <h1>Transactions</h1>
 
-      {activeTx && (
-        <RefundModal
-          tx={activeTx}
-          onClose={() => setActiveTx(null)}
-          onSuccess={(patch) => {
-            onRefunded(patch);
-            setActiveTx(null);
-          }}
+      {loading && <p className="state">Loading...</p>}
+      {error && <p className="state state-error">Error: {error}</p>}
+
+      {!loading && !error && transactions.length === 0 && (
+        <p className="state">No transactions found.</p>
+      )}
+
+      {!loading && !error && transactions.length > 0 && (
+        <TransactionsTable
+          transactions={transactions}
+          onRefunded={(patch) =>
+            setTransactions((prev) =>
+              prev.map((t) =>
+                t.id === patch.id
+                  ? { ...t, status: patch.status, refundedAmount: patch.refundedAmount }
+                  : t,
+              ),
+            )
+          }
         />
       )}
-    </>
+    </main>
   );
 }

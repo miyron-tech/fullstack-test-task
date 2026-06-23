@@ -17,4 +17,7 @@ export interface Transaction {
 export interface RefundResponse {
   refundId: number;
   status: string;
+  transactionStatus: string;
+  refundedAmount: string;
+  providerRefundId: string | null;
 }

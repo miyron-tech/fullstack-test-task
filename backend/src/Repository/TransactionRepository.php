@@ -22,6 +22,8 @@ class TransactionRepository extends ServiceEntityRepository
     public function findForListing(): array
     {
         return $this->createQueryBuilder('t')
+            ->addSelect('m')
+            ->join('t.merchant', 'm')
             ->orderBy('t.createdAt', 'DESC')
             ->getQuery()
             ->getResult();

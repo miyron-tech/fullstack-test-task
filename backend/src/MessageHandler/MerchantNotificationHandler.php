@@ -6,6 +6,7 @@ use App\Message\MerchantNotification;
 use App\Repository\MerchantRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Messenger\Exception\UnrecoverableMessageHandlingException;
 
 #[AsMessageHandler]
 final class MerchantNotificationHandler
@@ -18,19 +19,19 @@ final class MerchantNotificationHandler
 
     public function __invoke(MerchantNotification $message): void
     {
-        try {
-            $merchant = $this->merchants->find($message->merchantId);
-            $this->send($merchant, $message->message);
-        } catch (\Throwable $e) {
-        }
-    }
+        $merchant = $this->merchants->find($message->merchantId);
 
-    private function send(?object $merchant, string $text): void
-    {
         if (null === $merchant) {
-            throw new \RuntimeException('merchant not found');
+            throw new UnrecoverableMessageHandlingException(sprintf(
+                'Merchant %d not found; notification cannot be delivered.',
+                $message->merchantId,
+            ));
         }
 
-        $this->logger->info(sprintf('notify merchant %d: %s', $merchant->getId(), $text));
+        $this->logger->info(sprintf(
+            'notify merchant %d: %s',
+            $merchant->getId(),
+            $message->message,
+        ));
     }
 }

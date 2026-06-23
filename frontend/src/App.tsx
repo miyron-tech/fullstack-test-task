@@ -1,49 +1,79 @@
-import { useEffect, useState } from "react";
-import { fetchTransactions } from "./api/client";
-import { TransactionsTable } from "./components/TransactionsTable";
-import type { Transaction } from "./types";
-import "./App.css";
+import { useState } from "react";
+import type { Transaction } from "../types";
+import { RefundModal, type RowPatch } from "./RefundModal";
 
-export default function App() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface TransactionsTableProps {
+  transactions: Transaction[];
+  onRefunded: (patch: RowPatch) => void;
+}
 
-  useEffect(() => {
-    let cancelled = false;
+function refundable(tx: Transaction): number {
+  return Number(tx.amount) - Number(tx.refundedAmount);
+}
 
-    fetchTransactions()
-      .then((data) => {
-        if (!cancelled) setTransactions(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Unknown error");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+function isRefundable(tx: Transaction): boolean {
+  return refundable(tx) > 0 && tx.status.toLowerCase() !== "refunded";
+}
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+export function TransactionsTable({ transactions, onRefunded }: TransactionsTableProps) {
+  const [activeTx, setActiveTx] = useState<Transaction | null>(null);
 
   return (
-    <main className="app">
-      <h1>Transactions</h1>
+    <>
+      <table className="tx-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Merchant</th>
+            <th className="num">Amount</th>
+            <th>Currency</th>
+            <th className="num">Fee</th>
+            <th>Status</th>
+            <th className="num">Refunded</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transactions.map((tx) => (
+            <tr key={tx.id}>
+              <td>{tx.id}</td>
+              <td>{tx.merchantName}</td>
+              <td className="num">{tx.amount}</td>
+              <td>{tx.currency}</td>
+              <td className="num">{tx.feeDisplayed}</td>
+              <td>
+                <span className={`status status-${tx.status.toLowerCase()}`}>
+                  {tx.status}
+                </span>
+              </td>
+              <td className="num">{tx.refundedAmount}</td>
+              <td>{new Date(tx.createdAt).toLocaleString()}</td>
+              <td>
+                <button
+                  type="button"
+                  className="refund-btn"
+                  disabled={!isRefundable(tx)}
+                  onClick={() => setActiveTx(tx)}
+                >
+                  Возврат
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      {loading && <p className="state">Loading...</p>}
-      {error && <p className="state state-error">Error: {error}</p>}
-
-      {!loading && !error && transactions.length === 0 && (
-        <p className="state">No transactions found.</p>
+      {activeTx && (
+        <RefundModal
+          tx={activeTx}
+          onClose={() => setActiveTx(null)}
+          onSuccess={(patch) => {
+            onRefunded(patch);
+            setActiveTx(null);
+          }}
+        />
       )}
-
-      {!loading && !error && transactions.length > 0 && (
-        <TransactionsTable transactions={transactions} />
-      )}
-    </main>
+    </>
   );
 }

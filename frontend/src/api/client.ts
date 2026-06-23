@@ -15,13 +15,29 @@ export async function requestRefund(
   amount: string,
   reason: string,
 ): Promise<RefundResponse> {
-  // TODO(candidate): generate a unique Idempotency-Key (UUID) and POST the refund.
-  // Send POST to `${API_BASE}/api/admin/transactions/${id}/refund`
-  //   - JSON body: { amount, reason }
-  //   - header: "Idempotency-Key": <uuid>
-  // Check res.ok, throw on error, and return the parsed RefundResponse.
-  void id;
-  void amount;
-  void reason;
-  throw new Error("requestRefund not implemented");
+  const idempotencyKey =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  const res = await fetch(`${API_BASE}/api/admin/transactions/${id}/refund`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify({ amount, reason }),
+  });
+
+  if (!res.ok) {
+    let message = `Refund failed: ${res.status} ${res.statusText}`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body && typeof body.error === "string") message = body.error;
+    } catch {
+    }
+    throw new Error(message);
+  }
+
+  return (await res.json()) as RefundResponse;
 }
